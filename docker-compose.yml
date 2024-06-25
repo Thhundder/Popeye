@@ -1,0 +1,77 @@
+version: '3'
+
+services:
+  poll:
+    build: ./poll
+    depends_on:
+      - redis
+    ports:
+      - "5000:80"
+    environment:
+      - REDIS_HOST=redis
+    networks:
+      - poll-tier
+    restart: unless-stopped
+
+  redis:
+    image: "redis:7.0.15"
+    ports:
+      - "6379:6379"
+    networks:
+      - poll-tier
+      - back-tier
+    restart: unless-stopped
+
+  worker:
+    build: ./worker
+    depends_on:
+      - db
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    networks:
+      - back-tier
+    restart: unless-stopped
+
+  db:
+    image: "postgres:16.2"
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=postgres
+    networks:
+      - result-tier
+      - back-tier
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d/schema.sql
+    restart: unless-stopped
+
+  result:
+    build: ./result
+    depends_on:
+      - db
+    ports:
+      - "5001:80"
+    environment:
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+    networks:
+      - result-tier
+    restart: unless-stopped
+
+networks:
+  poll-tier:
+  result-tier:
+  back-tier:
+
+volumes:
+  db-data:
